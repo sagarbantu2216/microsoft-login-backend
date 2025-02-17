@@ -1,11 +1,11 @@
 require("dotenv").config();
 const express = require("express");
+const { RedisStore } = require("connect-redis");
 const session = require("express-session");
-const MongoDBStore = require("connect-mongodb-session")(session);
+const { createClient } = require("redis");
 const cors = require("cors");
 const msal = require("@azure/msal-node");
 const crypto = require("crypto");
-const mongoose = require("mongoose");
 
 const app = express();
 
@@ -19,22 +19,26 @@ app.use(cors({
 
 app.use(express.json());
 
-// MongoDB Connection
-mongoose.connect(process.env.MONGO_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true
-}).then(() => console.log("MongoDB connected"))
-  .catch(err => console.error("MongoDB connection error:", err));
-
-// Configure MongoDB Session Store
-const sessionStore = new MongoDBStore({
-    uri: process.env.MONGO_URI,
-    collection: "sessions",
-    expires: 24 * 60 * 60 * 1000 // 24 hours
+// Redis Connection
+const redisClient = createClient({
+    url: process.env.REDIS_URL,
+    socket: {
+        tls: false // Enable TLS if required by Redis Cloud
+    }
 });
 
-sessionStore.on("error", function (error) {
-    console.error("Session store error:", error);
+redisClient.on("error", (err) => {
+    console.error("❌ Redis connection error:", err);
+});
+
+redisClient.connect()
+    .then(() => console.log("✅ Connected to Redis Cloud"))
+    .catch(console.error);
+
+// Configure Redis Session Store
+const sessionStore = new RedisStore({
+    client: redisClient,
+    prefix: "myapp:", // Optional prefix for keys
 });
 
 // Configure Session Middleware
